@@ -1,0 +1,45 @@
+name: AWS EC2 Launch
+
+on:
+  workflow_dispatch: # Permite ejecutar la acción manualmente desde GitHub UI.
+
+jobs:
+  launch-ec2:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Configuración de AWS CLI
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1 
+
+      # Lanza una nueva instancia EC2
+      - name: Launch EC2 instance
+        id: ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances \
+            --image-id ami-1234567890abcdef0 \ # Reemplaza con el ID de AMI deseado
+            --count 1 \
+            --instance-type t2.micro \ # Cambia el tipo de instancia según tus necesidades
+            --key-name MyEC2KeyPair \ # Reemplaza con tu par de claves de EC2
+            --security-group-ids sg-0123456789abcdef0 \ # Reemplaza con el ID de tu grupo de seguridad
+            --subnet-id subnet-0123456789abcdef0 \ # Reemplaza con el ID de tu subred
+            --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=GitHubActionInstance}]' \
+            --query 'Instances[0].InstanceId' \
+            --output text)
+          echo "Instance ID: $INSTANCE_ID"
+          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+
+      # Espera hasta que la instancia EC2 esté en estado 'running'
+      - name: Wait for EC2 instance to be running
+        run: |
+          aws ec2 wait instance-running --instance-ids ${{ env.INSTANCE_ID }}
+          echo "EC2 instance ${{ env.INSTANCE_ID }} is now running."
+
+      # Obtener información de la instancia EC2
+      - name: Get EC2 instance information
+        run: |
+          aws ec2 describe-instances --instance-ids ${{ env.INSTANCE_ID }}
